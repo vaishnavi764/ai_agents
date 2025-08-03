@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import httpx
 import os
@@ -9,6 +11,9 @@ app = FastAPI(
     description="A REST API server that converts text to speech using Murf's TTS API",
     version="1.0.0"
 )
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class TTSRequest(BaseModel):
     text: str
@@ -28,11 +33,17 @@ MURF_API_KEY = os.getenv("MURF_API_KEY", "your-murf-api-key-here")
 
 @app.get("/")
 async def root():
-    """Root endpoint with basic information"""
+    """Serve the demo HTML page"""
+    return FileResponse("static/index.html")
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint"""
     return {
         "message": "TTS Server with Murf API",
-        "docs": "/docs",
-        "tts_endpoint": "/generate-tts"
+        "docs": "/docs", 
+        "tts_endpoint": "/generate-tts",
+        "demo": "/"
     }
 
 @app.post("/generate-tts", response_model=TTSResponse)

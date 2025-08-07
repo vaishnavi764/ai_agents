@@ -1,0 +1,6 @@
+flask==3.0.0
+flask-cors==4.0.0
+openai-whisper
+torch
+torchaudio
+werkzeug==3.0.1

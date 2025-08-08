@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Echo Bot v2 (Murf Voice)</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 2rem; }
+      button { padding: 0.6rem 1rem; margin-right: 0.5rem; }
+      #status { margin: 0.5rem 0; color: #555; }
+      .row { margin: 1rem 0; }
+      audio { width: 100%; margin-top: 1rem; }
+      label { display: inline-block; margin-right: 0.5rem; }
+      input[type="text"] { padding: 0.4rem; width: 22rem; }
+    </style>
+  </head>
+  <body>
+    <h2>Echo Bot v2 — Murf voice</h2>
+    <div class="row">
+      <button id="recordBtn">Start Recording</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+    <div id="status">Idle</div>
+
+    <div class="row">
+      <label for="voiceId">Murf voiceId:</label>
+      <input id="voiceId" type="text" placeholder="en-US-natalie" />
+      <label for="format">Format:</label>
+      <select id="format">
+        <option value="MP3" selected>MP3</option>
+        <option value="WAV">WAV</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <audio id="player" controls></audio>
+    </div>
+
+    <script>
+      const recordBtn = document.getElementById('recordBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const statusEl = document.getElementById('status');
+      const player = document.getElementById('player');
+      const voiceIdInput = document.getElementById('voiceId');
+      const formatSelect = document.getElementById('format');
+
+      let mediaRecorder;
+      let recordedChunks = [];
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      async function startRecording() {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          recordedChunks = [];
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = async () => {
+            try {
+              setStatus('Preparing audio...');
+              const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+
+              const form = new FormData();
+              form.append('audio', blob, 'input.webm');
+
+              const v = voiceIdInput.value.trim();
+              const f = formatSelect.value;
+
+              // Send as query params for voice/format override (optional)
+              const url = new URL('/api/echo-murf', window.location.origin);
+              if (v) url.searchParams.set('voiceId', v);
+              if (f) url.searchParams.set('format', f);
+
+              setStatus('Uploading and transcribing...');
+              const resp = await fetch(url.toString(), { method: 'POST', body: form });
+              if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.error || 'Request failed');
+              }
+
+              const arrayBuf = await resp.arrayBuffer();
+              const ct = resp.headers.get('Content-Type') || 'audio/mpeg';
+              const outBlob = new Blob([arrayBuf], { type: ct });
+              const objUrl = URL.createObjectURL(outBlob);
+              player.src = objUrl;
+              setStatus('Done. Playing Murf audio.');
+              await player.play().catch(() => {});
+            } catch (e) {
+              console.error(e);
+              setStatus('Error: ' + (e.message || e));
+            } finally {
+              stopBtn.disabled = true;
+              recordBtn.disabled = false;
+            }
+          };
+
+          mediaRecorder.start();
+          setStatus('Recording...');
+          recordBtn.disabled = true;
+          stopBtn.disabled = false;
+        } catch (e) {
+          console.error(e);
+          setStatus('Mic permission denied or unsupported.');
+        }
+      }
+
+      function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          setStatus('Stopping...');
+          mediaRecorder.stop();
+        }
+      }
+
+      recordBtn.addEventListener('click', startRecording);
+      stopBtn.addEventListener('click', stopRecording);
+    </script>
+  </body>
+</html>

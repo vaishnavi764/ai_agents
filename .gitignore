@@ -1,0 +1,23 @@
+node_modules/
+.env
+npm-debug.log*
+yarn-error.log
+/tmp
+/tmp/**
+/tmp/*
+.DS_Store
+.tmp
+*.log
+coverage/
+.tmp/
+.tmp/**
+/tmp
+.tmp
+
+# build artifacts
+build/
+dist/
+
+# local temp
+/tmp
+/workspace/tmp

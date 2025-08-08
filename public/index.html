@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Echo Bot v2 (Murf)</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+      .row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+      button { padding: 8px 12px; font-size: 16px; }
+      #status { min-height: 24px; color: #333; }
+      audio { width: 100%; margin-top: 16px; }
+      .transcript { font-family: ui-monospace, Menlo, Consolas, monospace; background: #f6f8fa; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h2>Echo Bot v2 — Murf Voice</h2>
+    <div class="row">
+      <button id="recordBtn">Start Recording</button>
+      <span id="status"></span>
+    </div>
+    <div class="row">
+      <audio id="player" controls></audio>
+    </div>
+    <div id="transcriptWrap" style="display:none;">
+      <h3>Transcript</h3>
+      <div id="transcript" class="transcript"></div>
+    </div>
+
+    <script>
+      const recordBtn = document.getElementById('recordBtn');
+      const statusEl = document.getElementById('status');
+      const player = document.getElementById('player');
+      const transcriptWrap = document.getElementById('transcriptWrap');
+      const transcriptEl = document.getElementById('transcript');
+
+      let mediaRecorder;
+      let chunks = [];
+      let recording = false;
+
+      async function startRecording() {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        mediaRecorder.onstop = onStop;
+        mediaRecorder.start();
+        recording = true;
+        recordBtn.textContent = 'Stop Recording';
+        statusEl.textContent = 'Recording...';
+      }
+
+      async function stopRecording() {
+        if (mediaRecorder && recording) {
+          mediaRecorder.stop();
+          recording = false;
+          recordBtn.textContent = 'Start Recording';
+          statusEl.textContent = 'Processing...';
+        }
+      }
+
+      async function onStop() {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', blob, 'input.webm');
+        try {
+          const resp = await fetch('/tts/echo', { method: 'POST', body: formData });
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.details || err.error || ('HTTP ' + resp.status));
+          }
+          const data = await resp.json();
+          const url = data.url;
+          player.src = url;
+          player.play().catch(() => {});
+          statusEl.textContent = 'Done.';
+          if (data.transcript) {
+            transcriptWrap.style.display = '';
+            transcriptEl.textContent = data.transcript;
+          }
+        } catch (e) {
+          statusEl.textContent = 'Error: ' + e.message;
+        }
+      }
+
+      recordBtn.addEventListener('click', async () => {
+        if (!recording) {
+          await startRecording();
+        } else {
+          await stopRecording();
+        }
+      });
+    </script>
+  </body>
+</html>
